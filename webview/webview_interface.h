@@ -83,6 +83,9 @@ public:
 
 	virtual void eval(std::string js) = 0;
 
+	virtual void openDevTools() {
+	}
+
 	virtual void focus() = 0;
 
 	virtual void setInteractionHandler(Fn<void()> handler) {
@@ -158,6 +161,15 @@ struct Message {
 	std::string sourceUrl;
 };
 
+struct Cookie {
+	std::string name;
+	std::string value;
+	std::string domain;
+	std::string path;
+	bool httpOnly = false;
+	bool secure = false;
+};
+
 struct Config {
 	QWidget *parent = nullptr;
 	QColor opaqueBg;
@@ -182,6 +194,9 @@ struct Config {
 	std::string shellMessageToken;
 	std::string restrictedOrigin;
 	std::string restrictedContentSecurityPolicy;
+	bool allowMediaPermissions = false;
+	std::string language;
+	std::vector<Cookie> cookies;
 };
 
 struct Available {

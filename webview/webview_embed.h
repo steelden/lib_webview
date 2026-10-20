@@ -51,6 +51,9 @@ struct WindowConfig {
 	QSize initialSize;
 	QString shellMessageToken;
 	QString restrictedOrigin;
+	bool allowMediaPermissions = false; // Camera and microphone.
+	QString language; // The browser UI and Accept-Language.
+	std::vector<Cookie> cookies; // Set before the first navigation.
 };
 
 class Window final {
@@ -88,6 +91,7 @@ public:
 	void setDataRequestHandler(Fn<DataResult(DataRequest)> handler);
 	void init(const QByteArray &js);
 	void eval(const QByteArray &js);
+	void openDevTools();
 
 	void focus();
 	void resize(QSize size);

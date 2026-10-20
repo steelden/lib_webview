@@ -179,6 +179,9 @@ bool Window::createWebView(QWidget *parent, const WindowConfig &config) {
 		.restrictedOrigin = config.restrictedOrigin.toStdString(),
 		.restrictedContentSecurityPolicy
 			= restrictedContent.policy.toStdString(),
+		.allowMediaPermissions = config.allowMediaPermissions,
+		.language = config.language.toStdString(),
+		.cookies = config.cookies,
 	});
 	if (_webview && restricted) {
 		_webview->initAllFrames(restrictedContent.script.toStdString());
@@ -285,6 +288,12 @@ void Window::eval(const QByteArray &js) {
 	Expects(_webview != nullptr);
 
 	_webview->eval(js.toStdString());
+}
+
+void Window::openDevTools() {
+	if (_webview) {
+		_webview->openDevTools();
+	}
 }
 
 void Window::focus() {

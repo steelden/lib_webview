@@ -310,6 +310,8 @@ private:
 
 	QColor _opaqueBg;
 	std::string _restrictedOrigin;
+	bool _allowMediaPermissions = false;
+	std::vector<Cookie> _cookies;
 	bool _debug = false;
 	bool _destroying = false;
 
@@ -329,6 +331,8 @@ Handler::Handler(
 , _readyHandler(std::move(readyHandler))
 , _opaqueBg(config.opaqueBg)
 , _restrictedOrigin(std::move(config.restrictedOrigin))
+, _allowMediaPermissions(config.allowMediaPermissions)
+, _cookies(config.cookies)
 , _debug(config.debug) {
 	saveThis(this);
 	setOpaqueBg(_opaqueBg);
@@ -400,6 +404,26 @@ HRESULT STDMETHODCALLTYPE Handler::Invoke(
 	_controller->get_CoreWebView2(_webview.put());
 	if (!_webview) {
 		return E_FAIL;
+	}
+	if (!_cookies.empty()) {
+		if (const auto webview2 = _webview.try_as<ICoreWebView2_2>()) {
+			auto manager = winrt::com_ptr<ICoreWebView2CookieManager>();
+			webview2->get_CookieManager(manager.put());
+			for (const auto &data : _cookies) {
+				auto cookie = winrt::com_ptr<ICoreWebView2Cookie>();
+				if (manager && manager->CreateCookie(
+						ToWide(data.name).c_str(),
+						ToWide(data.value).c_str(),
+						ToWide(data.domain).c_str(),
+						ToWide(data.path).c_str(),
+						cookie.put()) == S_OK && cookie) {
+					cookie->put_IsHttpOnly(data.httpOnly ? TRUE : FALSE);
+					cookie->put_IsSecure(data.secure ? TRUE : FALSE);
+					manager->AddOrUpdateCookie(cookie.get());
+				}
+			}
+		}
+		_cookies.clear();
 	}
 	auto token = ::EventRegistrationToken();
 	_webview->add_WebMessageReceived(this, &token);
@@ -533,6 +557,11 @@ HRESULT STDMETHODCALLTYPE Handler::Invoke(
 	if (result == S_OK) {
 		if (!_restrictedOrigin.empty()) {
 			args->put_State(COREWEBVIEW2_PERMISSION_STATE_DENY);
+		} else if (_allowMediaPermissions
+			&& (kind == COREWEBVIEW2_PERMISSION_KIND_MICROPHONE
+				|| kind == COREWEBVIEW2_PERMISSION_KIND_CAMERA)) {
+			// Video conferences: no prompt for the camera and microphone.
+			args->put_State(COREWEBVIEW2_PERMISSION_STATE_ALLOW);
 		} else if (kind == COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ) {
 			// Never let the page read the clipboard on its own, not even
 			// after asking the user: navigator.clipboard.read/readText()
@@ -898,6 +927,7 @@ public:
 	void init(std::string js) override;
 	void initAllFrames(std::string js) override;
 	void eval(std::string js) override;
+	void openDevTools() override;
 
 	void focus() override;
 	void setInteractionHandler(Fn<void()> handler) override;
@@ -1008,6 +1038,9 @@ void Instance::start(Config &&config) {
 		: L"--disable-features=ElasticOverscroll,msSmartScreenProtection "
 			L"--force-webrtc-ip-handling-policy=disable_non_proxied_udp "
 			L"--mute-audio");
+	if (!config.language.empty()) {
+		options->put_Language(ToWide(config.language).c_str());
+	}
 	if (_hidden && !config.restrictedOrigin.empty()) {
 		_keepActiveTimer.callEach(kKeepActiveInterval);
 	}
@@ -1232,6 +1265,12 @@ void Instance::initAllFrames(std::string js) {
 void Instance::eval(std::string js) {
 	_waitingForReady.push_back(EvalScript{ std::move(js) });
 	processNextReadyStep();
+}
+
+void Instance::openDevTools() {
+	if (_handler && _handler->valid()) {
+		_handler->webview()->OpenDevToolsWindow();
+	}
 }
 
 void Instance::focus() {
