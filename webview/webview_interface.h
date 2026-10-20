@@ -42,7 +42,6 @@ struct NavigationHistoryState {
 };
 
 struct PopupAnchor {
-	std::optional<QRect> geometry;
 	std::optional<QSize> outerSize;
 	Ui::Platform::ForeignParent transientParent;
 };
@@ -92,15 +91,14 @@ public:
 	}
 
 	virtual void setOpaqueBg(QColor opaqueBg) = 0;
-	virtual void resize(int width, int height) {
-	}
 	virtual void setFullscreen(bool fullscreen) {
+	}
+	virtual void setInputBlocked(bool blocked) {
+	}
+	virtual void setVisible(bool visible) {
 	}
 
 	[[nodiscard]] virtual QWidget *widget() = 0;
-	[[nodiscard]] virtual void *winId() {
-		return nullptr;
-	}
 	[[nodiscard]] virtual PopupAnchor popupAnchor() {
 		return {};
 	}
@@ -122,7 +120,6 @@ enum class DialogType {
 
 struct DialogArgs {
 	QWidget *parent = nullptr;
-	std::optional<QRect> anchorGeometry;
 	Ui::Platform::ForeignParent transientParent;
 	DialogType type = DialogType::Alert;
 	std::string value;
@@ -136,6 +133,15 @@ struct DialogResult {
 };
 using AsyncDialogHandler = std::function<
 	bool(DialogArgs, std::function<void(DialogResult)>)>;
+
+enum class PermissionType {
+	Microphone,
+	Camera,
+	CameraAndMicrophone,
+	Geolocation,
+};
+using PermissionHandler = std::function<
+	void(PermissionType, std::function<void(bool)>)>;
 
 struct DataResponse {
 	std::unique_ptr<DataStream> stream;
@@ -174,11 +180,14 @@ struct Config {
 	QWidget *parent = nullptr;
 	QColor opaqueBg;
 	std::function<void(Message)> messageHandler;
-	std::function<bool(std::string,bool)> navigationStartHandler;
+	std::function<bool(std::string,bool)> navigationPolicyHandler;
+	std::function<void()> navigationStartHandler;
 	std::function<void(bool)> navigationDoneHandler;
 	std::function<void()> externalWindowCloseHandler;
+	std::function<void(bool)> fullscreenChangedHandler;
 	std::function<DialogResult(DialogArgs)> dialogHandler;
 	AsyncDialogHandler asyncDialogHandler;
+	PermissionHandler permissionHandler;
 	std::function<DataResult(DataRequest)> dataRequestHandler;
 	std::string dataProtocolOverride;
 	std::string dataRequestRedirectHost;

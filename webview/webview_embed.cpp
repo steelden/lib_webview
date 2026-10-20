@@ -158,11 +158,14 @@ bool Window::createWebView(QWidget *parent, const WindowConfig &config) {
 		.parent = parent,
 		.opaqueBg = config.opaqueBg,
 		.messageHandler = messageHandler(),
+		.navigationPolicyHandler = navigationPolicyHandler(),
 		.navigationStartHandler = navigationStartHandler(),
 		.navigationDoneHandler = navigationDoneHandler(),
 		.externalWindowCloseHandler = externalWindowCloseHandler(),
+		.fullscreenChangedHandler = fullscreenChangedHandler(),
 		.dialogHandler = dialogHandler(),
 		.asyncDialogHandler = asyncDialogHandler(),
+		.permissionHandler = permissionHandler(),
 		.dataRequestHandler = dataRequestHandler(),
 		.dataProtocolOverride = config.dataProtocolOverride.toStdString(),
 		.dataRequestRedirectHost = config.dataRequestRedirectHost.toStdString(),
@@ -191,10 +194,6 @@ bool Window::createWebView(QWidget *parent, const WindowConfig &config) {
 
 QWidget *Window::widget() const {
 	return _webview ? _webview->widget() : nullptr;
-}
-
-void *Window::winId() const {
-	return _webview ? _webview->winId() : nullptr;
 }
 
 PopupAnchor Window::popupAnchor() const {
@@ -302,16 +301,22 @@ void Window::focus() {
 	_webview->focus();
 }
 
-void Window::resize(QSize size) {
-	Expects(_webview != nullptr);
-
-	_webview->resize(size.width(), size.height());
-}
-
 void Window::setFullscreen(bool fullscreen) {
 	Expects(_webview != nullptr);
 
 	_webview->setFullscreen(fullscreen);
+}
+
+void Window::setInputBlocked(bool blocked) {
+	Expects(_webview != nullptr);
+
+	_webview->setInputBlocked(blocked);
+}
+
+void Window::setVisible(bool visible) {
+	Expects(_webview != nullptr);
+
+	_webview->setVisible(visible);
 }
 
 void Window::setInteractionHandler(Fn<void()> handler) {
@@ -397,14 +402,18 @@ Fn<void(Message)> Window::messageHandler() const {
 	};
 }
 
-void Window::setNavigationStartHandler(Fn<bool(QString,bool)> handler) {
+void Window::setNavigationPolicyHandler(Fn<bool(QString,bool)> handler) {
 	if (!handler) {
-		_navigationStartHandler = nullptr;
+		_navigationPolicyHandler = nullptr;
 		return;
 	}
-	_navigationStartHandler = [=](std::string uri, bool newWindow) {
+	_navigationPolicyHandler = [=](std::string uri, bool newWindow) {
 		return handler(QString::fromStdString(uri), newWindow);
 	};
+}
+
+void Window::setNavigationStartHandler(Fn<void()> handler) {
+	_navigationStartHandler = std::move(handler);
 }
 
 void Window::setNavigationDoneHandler(Fn<void(bool)> handler) {
@@ -415,6 +424,10 @@ void Window::setExternalWindowCloseHandler(Fn<void()> handler) {
 	_externalWindowCloseHandler = std::move(handler);
 }
 
+void Window::setFullscreenChangedHandler(Fn<void(bool)> handler) {
+	_fullscreenChangedHandler = std::move(handler);
+}
+
 void Window::setDialogHandler(Fn<DialogResult(DialogArgs)> handler) {
 	_dialogHandler = handler ? handler : DefaultDialogHandler;
 }
@@ -423,11 +436,15 @@ void Window::setAsyncDialogHandler(AsyncDialogHandler handler) {
 	_asyncDialogHandler = std::move(handler);
 }
 
+void Window::setPermissionHandler(PermissionHandler handler) {
+	_permissionHandler = std::move(handler);
+}
+
 void Window::setDataRequestHandler(Fn<DataResult(DataRequest)> handler) {
 	_dataRequestHandler = std::move(handler);
 }
 
-Fn<bool(std::string,bool)> Window::navigationStartHandler() const {
+Fn<bool(std::string,bool)> Window::navigationPolicyHandler() const {
 	return [=](std::string message, bool newWindow) {
 		const auto lower = QString::fromStdString(message).toLower();
 		if (!lower.startsWith(u"http://"_q)
@@ -437,14 +454,24 @@ Fn<bool(std::string,bool)> Window::navigationStartHandler() const {
 			return false;
 		}
 		auto result = true;
-		if (_navigationStartHandler) {
+		if (_navigationPolicyHandler) {
 			base::Integration::Instance().enterFromEventLoop([&] {
-				result = _navigationStartHandler(
+				result = _navigationPolicyHandler(
 					std::move(message),
 					newWindow);
 			});
 		}
 		return result;
+	};
+}
+
+Fn<void()> Window::navigationStartHandler() const {
+	return [=] {
+		if (_navigationStartHandler) {
+			base::Integration::Instance().enterFromEventLoop([&] {
+				_navigationStartHandler();
+			});
+		}
 	};
 }
 
@@ -463,6 +490,16 @@ Fn<void()> Window::externalWindowCloseHandler() const {
 		if (_externalWindowCloseHandler) {
 			base::Integration::Instance().enterFromEventLoop([&] {
 				_externalWindowCloseHandler();
+			});
+		}
+	};
+}
+
+Fn<void(bool)> Window::fullscreenChangedHandler() const {
+	return [=](bool fullscreen) {
+		if (_fullscreenChangedHandler) {
+			base::Integration::Instance().enterFromEventLoop([&] {
+				_fullscreenChangedHandler(fullscreen);
 			});
 		}
 	};
@@ -494,6 +531,18 @@ AsyncDialogHandler Window::asyncDialogHandler() const {
 			result = _asyncDialogHandler(std::move(args), std::move(done));
 		});
 		return result;
+	};
+}
+
+PermissionHandler Window::permissionHandler() const {
+	return [=](PermissionType type, std::function<void(bool)> done) {
+		if (!_permissionHandler) {
+			done(false);
+			return;
+		}
+		base::Integration::Instance().enterFromEventLoop([&] {
+			_permissionHandler(type, std::move(done));
+		});
 	};
 }
 
