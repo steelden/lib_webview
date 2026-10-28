@@ -190,6 +190,7 @@ bool Window::createWebView(QWidget *parent, const WindowConfig &config) {
 		.allowMediaPermissions = config.allowMediaPermissions,
 		.language = config.language.toStdString(),
 		.cookies = config.cookies,
+		.authServerAllowlist = config.authServerAllowlist.toStdString(),
 	});
 	if (_webview && restricted) {
 		_webview->initAllFrames(restrictedContent.script.toStdString());

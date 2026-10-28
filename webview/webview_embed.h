@@ -54,6 +54,10 @@ struct WindowConfig {
 	bool allowMediaPermissions = false; // Camera and microphone.
 	QString language; // The browser UI and Accept-Language.
 	std::vector<Cookie> cookies; // Set before the first navigation.
+	// The hosts the integrated Windows authentication (Kerberos, NTLM) is
+	// answered automatically for: "host1,*.domain2". All the webviews of one
+	// storage must have the same.
+	QString authServerAllowlist;
 };
 
 class Window final {

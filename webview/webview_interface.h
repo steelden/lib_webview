@@ -206,6 +206,7 @@ struct Config {
 	bool allowMediaPermissions = false;
 	std::string language;
 	std::vector<Cookie> cookies;
+	std::string authServerAllowlist;
 };
 
 struct Available {

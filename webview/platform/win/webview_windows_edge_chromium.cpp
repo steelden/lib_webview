@@ -1083,12 +1083,19 @@ void Instance::start(Config &&config) {
 		Microsoft::WRL::Make<CoreWebView2EnvironmentOptions>().Detach(),
 		winrt::take_ownership_from_abi);
 	// Avoid Windows account lockouts: crbug.com/541310282.
-	options->put_AdditionalBrowserArguments(config.restrictedOrigin.empty()
+	auto arguments = std::wstring(config.restrictedOrigin.empty()
 		? L"--disable-features=ElasticOverscroll,AutofillAiWalletPrivatePasses"
 		: L"--disable-features=ElasticOverscroll,AutofillAiWalletPrivatePasses,"
 			L"msSmartScreenProtection "
 			L"--force-webrtc-ip-handling-policy=disable_non_proxied_udp "
 			L"--mute-audio");
+	// The integrated Windows authentication only for the hosts allowed.
+	if (!config.authServerAllowlist.empty()
+		&& config.restrictedOrigin.empty()) {
+		arguments += L" --auth-server-allowlist="
+			+ ToWide(config.authServerAllowlist);
+	}
+	options->put_AdditionalBrowserArguments(arguments.c_str());
 	if (!config.language.empty()) {
 		options->put_Language(ToWide(config.language).c_str());
 	}
